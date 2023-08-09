@@ -1,0 +1,5 @@
+package osquery
+
+func abc() {
+
+}

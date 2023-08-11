@@ -20,11 +20,15 @@ func Plugin(ctx context.Context) *plugin.Plugin {
 func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plugin.Table, error) {
 	tables := map[string]*plugin.Table{}
 
-	// Example JSON data
-	jsonData := `[{"id": 1, "name": "Alice", "email": "alice@example.com"}, {"id": 2, "name": "Bob", "email": "bob@example.com"}]`
+	// retrieve all osquery table names
+	osqueryTableNames := retrieveOsqueryTableNames(ctx)
 
-	// Create a dynamic table for this JSON data
-	tables["users"] = tableJSON(ctx, jsonData)
+	// Create a table for each osquery table
+	for _, tablename := range osqueryTableNames {
+		tables[tablename] = tableOsquery(ctx, tablename)
+	}
+
+	plugin.Logger(ctx).Info("PluginTablesDebug, ctx:", ctx)
 
 	return tables, nil
 }

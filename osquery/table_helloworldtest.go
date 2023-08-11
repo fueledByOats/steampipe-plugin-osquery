@@ -9,7 +9,7 @@ import (
 
 func tableOsqueryTest(ctx context.Context) *plugin.Table {
 	return &plugin.Table{
-		Name:        "osquery_test",
+		Name:        "helloworld_test",
 		Description: "Test table for osquery.",
 		List: &plugin.ListConfig{
 			Hydrate: listTest,

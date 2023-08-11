@@ -1,0 +1,5 @@
+plugin.Logger(ctx).Info("tableJSONDebug, cols:", d.QueryContext.Columns)
+plugin.Logger(ctx).Info("tableJSONDebug, unsafequals:", d.QueryContext.UnsafeQuals)
+plugin.Logger(ctx).Info("tableJSONDebug, limit:", d.QueryContext.Limit)
+plugin.Logger(ctx).Info("tableJSONDebug, equalsquals:", d.EqualsQuals)
+plugin.Logger(ctx).Info("tableJSONDebug, quals:", d.Quals)

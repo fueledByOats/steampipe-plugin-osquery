@@ -3,3 +3,5 @@ plugin.Logger(ctx).Info("tableJSONDebug, unsafequals:", d.QueryContext.UnsafeQua
 plugin.Logger(ctx).Info("tableJSONDebug, limit:", d.QueryContext.Limit)
 plugin.Logger(ctx).Info("tableJSONDebug, equalsquals:", d.EqualsQuals)
 plugin.Logger(ctx).Info("tableJSONDebug, quals:", d.Quals)
+
+.tables = SELECT name FROM osquery_registry WHERE registry='table'

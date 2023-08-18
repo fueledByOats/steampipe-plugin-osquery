@@ -1,7 +1,22 @@
-plugin.Logger(ctx).Info("tableJSONDebug, cols:", d.QueryContext.Columns)
-plugin.Logger(ctx).Info("tableJSONDebug, unsafequals:", d.QueryContext.UnsafeQuals)
-plugin.Logger(ctx).Info("tableJSONDebug, limit:", d.QueryContext.Limit)
-plugin.Logger(ctx).Info("tableJSONDebug, equalsquals:", d.EqualsQuals)
-plugin.Logger(ctx).Info("tableJSONDebug, quals:", d.Quals)
+// logging
 
-.tables = SELECT name FROM osquery_registry WHERE registry='table'
+plugin.Logger(ctx).Info("tableJSONDebug, cols:", d.QueryContext.Columns)
+
+// .tables
+SELECT name FROM osquery_registry WHERE registry='table'
+
+// debugging pty 
+cmd0 := exec.Command("pwd")
+var err0 error
+cmd0.Dir = "/home/sven/go"
+c.ptmx0, err0 = startCommandWithPty(cmd0)
+if err0 != nil {
+    return fmt.Errorf("failed to start cmd1: %v", err0)
+}
+
+// Wait for the response
+scanner := bufio.NewScanner(c.ptmx0)
+for scanner.Scan() {
+    line := scanner.Text()
+    plugin.Logger(ctx).Info("Received go env:", line)
+}

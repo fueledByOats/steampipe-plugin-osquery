@@ -12,14 +12,16 @@ import (
 	"sync"
 
 	"github.com/creack/pty"
-	"github.com/fueledByOats/osquery-extension-stdio-json/client"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 	"golang.org/x/term"
 )
 
 var (
-	once            sync.Once
-	singletonClient *client.Client
+	once sync.Once
+	//singletonClient *client.Client
+	singletonClient *Client
+	clientMutex     sync.Mutex
+	clientInitErr   error
 )
 
 const (
@@ -44,17 +46,22 @@ type Client struct {
 }
 
 func retrieveJSONDataForTable(ctx context.Context, tablename string) string {
-	client := Client{}
+	clientMutex.Lock()
 
-	err := client.Start(ctx, "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
+	client := getClient(ctx)
+
+	/*err := client.Start(ctx, "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return "[{\"error\":\"error starting client\"}]"
-	}
+	}*/
 
 	query := fmt.Sprintf("SELECT * FROM %s", tablename)
 	result, err := client.SendQuery(ctx, query)
-	client.Stop()
+
+	//client.Stop()
+	clientMutex.Unlock()
+
 	if err != nil {
 		fmt.Println("Error:", err)
 		return fmt.Sprintf("[{\"error\":\"%s\"}]", err)
@@ -92,8 +99,43 @@ func retrieveOsqueryTableNames(ctx context.Context) []string {
 	}
 
 	return tableNames
-	//plugin.Logger(ctx).Info("tablenames:", tableNames)
-	//return []string{"users"}
+}
+
+func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[string]interface{}, error) {
+	jsonData := ""
+
+	clientMutex.Lock()
+
+	client := getClient(ctx)
+
+	query := fmt.Sprintf("PRAGMA table_info(%s);", tablename)
+	result, err := client.SendQuery(ctx, query)
+
+	clientMutex.Unlock()
+
+	if err != nil {
+		jsonData = "{\"data\":[{\"name\":\"error\"}]"
+	} else {
+		jsonData = string(result.Data)
+	}
+
+	var tableDef []map[string]string
+	err = json.Unmarshal([]byte(jsonData), &tableDef)
+	if err != nil {
+		fmt.Println("Error unmarshalling:", err)
+		return nil, err
+	}
+
+	var colNames []map[string]interface{}
+	for _, table := range tableDef {
+		col := make(map[string]interface{})
+		if name, ok := table["name"]; ok {
+			col["name"] = name
+			colNames = append(colNames, col)
+		}
+	}
+
+	return colNames, nil
 }
 
 func (c *Client) Start(ctx context.Context, command string) error {
@@ -170,9 +212,9 @@ func (c *Client) Stop() {
 	if c.ptmx2 != nil {
 		c.ptmx2.Close()
 	}
-	if c.origState != nil {
+	/*if c.origState != nil {
 		term.Restore(int(os.Stdin.Fd()), c.origState)
-	}
+	}*/
 }
 
 func parseOsqueryResult(r io.Reader) *Result {
@@ -195,14 +237,18 @@ func startCommandWithPty(cmd *exec.Cmd) (*os.File, error) {
 	return ptmx, nil
 }
 
-func getClient(ctx context.Context) *client.Client {
+func getClient(ctx context.Context) *Client {
 	once.Do(func() {
-		singletonClient = &client.Client{}
-		err := singletonClient.Start("/home/sven/go/src/osquery-extension-stdio-json/server/extension --socket /home/sven/.osquery/shell.em")
-		if err != nil {
-			plugin.Logger(ctx).Info("Error initializing client:", err)
+		singletonClient = &Client{}
+		//singletonClient = &client.Client{}
+		clientInitErr = singletonClient.Start(ctx, "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
+		if clientInitErr != nil {
+			plugin.Logger(ctx).Info("Error initializing client:", clientInitErr)
 		}
 	})
 
+	if clientInitErr != nil {
+		return nil
+	}
 	return singletonClient
 }

@@ -11,40 +11,48 @@ import (
 )
 
 func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
-	// retrieve the JSON data for the given tablename
-	//jsonData := retrieveJSONDataForTable(ctx, tablename)
-	jsonData := retrieveJSONDataForTable(ctx, tablename)
 
-	return tableJSON(ctx, tablename, jsonData)
-}
-
-func tableJSON(ctx context.Context, tablename string, jsonData string) *plugin.Table {
-	var rows []map[string]interface{}
-	err := json.Unmarshal([]byte(jsonData), &rows)
+	// Retrieve table schema
+	tableSchema, err := retrieveTableDefinition(ctx, tablename)
 	if err != nil {
-		plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
+		plugin.Logger(ctx).Error("Error retrieving table definition:", "err", err)
 		panic(err)
 	}
 
-	// Dynamically generate columns based on the first entry's keys
+	// Dynamically generate columns based on the table schema
 	cols := []*plugin.Column{}
-	for key := range rows[0] {
-		cols = append(cols, &plugin.Column{Name: key, Type: proto.ColumnType_STRING, Transform: transform.FromField(key)})
+	for _, column := range tableSchema {
+		columnName, ok := column["name"].(string)
+		if ok {
+			cols = append(cols, &plugin.Column{Name: columnName, Type: proto.ColumnType_STRING, Transform: transform.FromField(columnName)})
+		}
 	}
 
 	return &plugin.Table{
 		Name:        tablename,
 		Description: fmt.Sprintf("osquery table: %s", tablename),
 		List: &plugin.ListConfig{
-			Hydrate: func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-				for _, row := range rows {
-					d.StreamListItem(ctx, row)
-				}
-				return nil, nil
-			},
+			Hydrate: listOsqueryTable(tablename),
 		},
 		Columns: cols,
 	}
 }
 
-// For debugging purposes
+func listOsqueryTable(tablename string) func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+	return func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+		jsonData := retrieveJSONDataForTable(ctx, tablename)
+
+		var rows []map[string]interface{}
+		err := json.Unmarshal([]byte(jsonData), &rows)
+		if err != nil {
+			plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
+			panic(err)
+		}
+
+		for _, row := range rows {
+			d.StreamListItem(ctx, row)
+		}
+
+		return nil, nil
+	}
+}

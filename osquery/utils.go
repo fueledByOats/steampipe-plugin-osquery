@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/creack/pty"
+	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 	"golang.org/x/term"
 )
@@ -34,6 +35,14 @@ type Query struct {
 
 type Result struct {
 	Data json.RawMessage `json:"data"`
+}
+
+var typeMapping = map[string]proto.ColumnType{
+	"TEXT":            proto.ColumnType_STRING,
+	"INTEGER":         proto.ColumnType_INT,
+	"BIGINT":          proto.ColumnType_INT,
+	"UNSIGNED BIGINT": proto.ColumnType_INT,
+	"DOUBLE":          proto.ColumnType_DOUBLE,
 }
 
 type Client struct {
@@ -122,20 +131,23 @@ func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[strin
 	var tableDef []map[string]string
 	err = json.Unmarshal([]byte(jsonData), &tableDef)
 	if err != nil {
-		fmt.Println("Error unmarshalling:", err)
+		plugin.Logger(ctx).Error("Error unmarshalling:", "err", err)
 		return nil, err
 	}
 
-	var colNames []map[string]interface{}
+	var colDefs []map[string]interface{}
 	for _, table := range tableDef {
 		col := make(map[string]interface{})
 		if name, ok := table["name"]; ok {
 			col["name"] = name
-			colNames = append(colNames, col)
 		}
+		if colType, ok := table["type"]; ok {
+			col["type"] = colType
+		}
+		colDefs = append(colDefs, col)
 	}
 
-	return colNames, nil
+	return colDefs, nil
 }
 
 func (c *Client) Start(ctx context.Context, command string) error {

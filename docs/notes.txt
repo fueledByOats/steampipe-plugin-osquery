@@ -20,3 +20,13 @@ for scanner.Scan() {
     line := scanner.Text()
     plugin.Logger(ctx).Info("Received go env:", line)
 }
+
+// Merch request: grpc/quals.go
+func QualToString(ctx context.Context, q *proto.Qual) string {
+	fieldName := q.FieldName
+	operator := q.GetStringValue()
+	value := GetQualValue(ctx, q.Value)
+
+	// Build the output string using string concatenation
+	return "Column: " + fieldName + ", Operator: '" + operator + "', Value: '" + fmt.Sprintf("%v", value) + "'"
+}

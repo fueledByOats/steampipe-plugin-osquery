@@ -2,7 +2,11 @@ module steampipe-plugin-osquery
 
 go 1.20
 
-require github.com/turbot/steampipe-plugin-sdk/v5 v5.5.1
+require (
+	github.com/creack/pty v1.1.18
+	github.com/turbot/steampipe-plugin-sdk/v5 v5.5.1
+	golang.org/x/term v0.11.0
+)
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -22,7 +26,6 @@ require (
 	github.com/btubbs/datetime v0.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/creack/pty v1.1.18 // indirect
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
@@ -30,7 +33,6 @@ require (
 	github.com/eko/gocache/v3 v3.1.2 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/fueledByOats/osquery-extension-stdio-json v0.0.0-20230811162147-a3a24df731d5 // indirect
 	github.com/gertd/go-pluralize v0.2.1 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
@@ -97,7 +99,6 @@ require (
 	golang.org/x/oauth2 v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/term v0.11.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.110.0 // indirect

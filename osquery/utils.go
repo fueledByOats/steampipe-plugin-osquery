@@ -37,6 +37,7 @@ type Result struct {
 	Data json.RawMessage `json:"data"`
 }
 
+// maps the osquery column type to the steampipe columntype
 var typeMapping = map[string]proto.ColumnType{
 	"TEXT":            proto.ColumnType_STRING,
 	"INTEGER":         proto.ColumnType_INT,
@@ -54,26 +55,22 @@ type Client struct {
 	origState *term.State
 }
 
-func retrieveJSONDataForTable(ctx context.Context, tablename string) string {
+func retrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
 	clientMutex.Lock()
 
 	client := getClient(ctx)
 
-	/*err := client.Start(ctx, "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
-	if err != nil {
-		fmt.Println("Error:", err)
-		return "[{\"error\":\"error starting client\"}]"
-	}*/
-
 	query := fmt.Sprintf("SELECT * FROM %s", tablename)
+	if quals != "" {
+		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, quals)
+	}
 	result, err := client.SendQuery(ctx, query)
 
-	//client.Stop()
 	clientMutex.Unlock()
 
 	if err != nil {
 		fmt.Println("Error:", err)
-		return fmt.Sprintf("[{\"error\":\"%s\"}]", err)
+		return ""
 	} else {
 		return string(result.Data)
 	}

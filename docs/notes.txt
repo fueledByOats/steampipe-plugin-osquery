@@ -22,6 +22,7 @@ for scanner.Scan() {
 }
 
 // Merch request: grpc/quals.go
+https://github.com/turbot/steampipe-plugin-sdk/blob/main/grpc/quals.go#L97
 func QualToString(ctx context.Context, q *proto.Qual) string {
 	fieldName := q.FieldName
 	operator := q.GetStringValue()

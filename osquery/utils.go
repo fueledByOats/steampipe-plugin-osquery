@@ -141,6 +141,11 @@ func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[strin
 		if colType, ok := table["type"]; ok {
 			col["type"] = colType
 		}
+		if pk, ok := table["pk"]; ok {
+			if err == nil {
+				col["pk"] = pk
+			}
+		}
 		colDefs = append(colDefs, col)
 	}
 

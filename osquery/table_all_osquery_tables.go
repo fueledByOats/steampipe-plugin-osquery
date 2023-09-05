@@ -3,6 +3,7 @@ package osquery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -21,13 +22,19 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 		panic(err)
 	}
 
+	primaryKeyColumn := ""
+
 	// Dynamically generate columns based on the table schema
 	cols := []*plugin.Column{}
-	for _, column := range tableSchema {
+	for i, column := range tableSchema {
 		columnName, ok := column["name"].(string)
 		if !ok {
 			plugin.Logger(ctx).Error("Failed to assert column name as string", "column", column)
 			continue
+		}
+
+		if i == 0 {
+			primaryKeyColumn = columnName
 		}
 
 		columnTypeStr, ok := column["type"].(string)
@@ -43,13 +50,26 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 		}
 
 		cols = append(cols, &plugin.Column{Name: columnName, Type: columnType, Transform: transform.FromField(columnName)})
+
+		pkVal, ok := column["pk"].(string)
+		if ok {
+			if pkVal == "1" {
+				primaryKeyColumn = columnName
+			}
+		}
 	}
+
+	plugin.Logger(ctx).Info("PK Col set:", primaryKeyColumn)
 
 	return &plugin.Table{
 		Name:        tablename,
 		Description: fmt.Sprintf("osquery table: %s", tablename),
-		List: &plugin.ListConfig{
+		/*List: &plugin.ListConfig{
 			Hydrate: listOsqueryTable(tablename),
+		},*/
+		Get: &plugin.GetConfig{
+			KeyColumns: plugin.SingleColumn(primaryKeyColumn),
+			Hydrate:    getOsqueryTable(tablename, primaryKeyColumn),
 		},
 		Columns: cols,
 	}
@@ -57,9 +77,6 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 
 func listOsqueryTable(tablename string) func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 	return func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-
-		plugin.Logger(ctx).Info("Unsafequals:", d.QueryContext.UnsafeQuals)
-		plugin.Logger(ctx).Info("Qualmaptostring:", qualMapToString(d.QueryContext.UnsafeQuals))
 
 		var jsonData string
 		if len(d.QueryContext.UnsafeQuals) > 0 {
@@ -84,6 +101,36 @@ func listOsqueryTable(tablename string) func(ctx context.Context, d *plugin.Quer
 	}
 }
 
+func getOsqueryTable(tablename string, pkCol string) func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+	return func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+
+		var jsonData string
+		if len(d.Quals) > 0 {
+			qualString, err := equalQualsTransform(d.EqualsQuals.String())
+			if err == nil {
+				jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
+			}
+		} else {
+			jsonData = retrieveJSONDataForTable(ctx, tablename, "")
+		}
+
+		var rows []map[string]interface{}
+		err := json.Unmarshal([]byte(jsonData), &rows)
+		if err != nil {
+			plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
+			return nil, err
+		}
+		if len(rows) == 0 {
+			plugin.Logger(ctx).Error("row is nil")
+			return nil, errors.New("Row data is nil")
+		}
+
+		row := rows[0]
+
+		return row, nil
+	}
+}
+
 func qualMapToString(qualMap map[string]*proto.Quals) string {
 	if len(qualMap) == 0 {
 		return ""
@@ -103,7 +150,7 @@ func qualMapToString(qualMap map[string]*proto.Quals) string {
 		for i, q := range quals.GetQuals() {
 			str := qualToString(q)
 			qb.WriteString(str)
-			// If it's not the last qual, append "and"
+			// if it's not the last qual, append "and"
 			if i < len(quals.GetQuals())-1 {
 				qb.WriteString(" and ")
 			}
@@ -119,6 +166,17 @@ func qualToString(q *proto.Qual) string {
 	operator := q.GetStringValue()
 	value := grpc.GetQualValue(q.Value)
 
-	// Build the output string using string concatenation
 	return "\"" + fieldName + "\" " + operator + " \"" + fmt.Sprintf("%v", value) + "\""
+}
+
+func equalQualsTransform(input string) (string, error) {
+	parts := strings.Split(input, "=")
+	if len(parts) != 2 {
+		return input, errors.New("Invalid String") // return the original string if it doesn't match the expected format
+	}
+
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[1])
+
+	return fmt.Sprintf(`"%s" = "%s"`, key, value), nil
 }

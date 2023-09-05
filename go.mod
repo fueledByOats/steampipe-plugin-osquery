@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/creack/pty v1.1.18
 	github.com/turbot/steampipe-plugin-sdk/v5 v5.5.1
-	golang.org/x/term v0.11.0
 )
 
 require (

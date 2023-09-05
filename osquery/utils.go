@@ -14,8 +14,16 @@ import (
 	"github.com/creack/pty"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
-	"golang.org/x/term"
 )
+
+// maps the osquery column type to the steampipe columntype
+var typeMapping = map[string]proto.ColumnType{
+	"TEXT":            proto.ColumnType_STRING,
+	"INTEGER":         proto.ColumnType_INT,
+	"BIGINT":          proto.ColumnType_INT,
+	"UNSIGNED BIGINT": proto.ColumnType_INT,
+	"DOUBLE":          proto.ColumnType_DOUBLE,
+}
 
 var (
 	once sync.Once
@@ -37,22 +45,12 @@ type Result struct {
 	Data json.RawMessage `json:"data"`
 }
 
-// maps the osquery column type to the steampipe columntype
-var typeMapping = map[string]proto.ColumnType{
-	"TEXT":            proto.ColumnType_STRING,
-	"INTEGER":         proto.ColumnType_INT,
-	"BIGINT":          proto.ColumnType_INT,
-	"UNSIGNED BIGINT": proto.ColumnType_INT,
-	"DOUBLE":          proto.ColumnType_DOUBLE,
-}
-
 type Client struct {
-	ptmx0     *os.File
-	ptmx1     *os.File
-	ptmx2     *os.File
-	ctx       context.Context
-	cancel    context.CancelFunc
-	origState *term.State
+	ptmx0  *os.File
+	ptmx1  *os.File
+	ptmx2  *os.File
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func retrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
@@ -172,11 +170,6 @@ func (c *Client) Start(ctx context.Context, command string) error {
 		return fmt.Errorf("failed to start cmd2: %v", err)
 	}
 
-	// Set stdin in raw mode and store the original state.
-	/*c.origState, err = term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		return fmt.Errorf("failed to set stdin in raw mode: %v", err)
-	}*/
 	return nil
 }
 
@@ -226,9 +219,6 @@ func (c *Client) Stop() {
 	if c.ptmx2 != nil {
 		c.ptmx2.Close()
 	}
-	/*if c.origState != nil {
-		term.Restore(int(os.Stdin.Fd()), c.origState)
-	}*/
 }
 
 func parseOsqueryResult(r io.Reader) *Result {

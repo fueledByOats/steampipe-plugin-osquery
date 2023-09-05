@@ -31,3 +31,6 @@ func QualToString(ctx context.Context, q *proto.Qual) string {
 	// Build the output string using string concatenation
 	return "Column: " + fieldName + ", Operator: '" + operator + "', Value: '" + fmt.Sprintf("%v", value) + "'"
 }
+
+// Known Bugs
+select * from file where "path"='/etc/passwd' or "path" = '/etc/shadow'

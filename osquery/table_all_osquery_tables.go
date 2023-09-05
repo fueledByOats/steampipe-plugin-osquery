@@ -15,7 +15,7 @@ import (
 
 func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 
-	// Retrieve table schema
+	// retrieve table schema
 	tableSchema, err := retrieveTableDefinition(ctx, tablename)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error retrieving table definition:", "err", err)
@@ -24,17 +24,13 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 
 	primaryKeyColumn := ""
 
-	// Dynamically generate columns based on the table schema
+	// dynamically generate columns based on the table schema
 	cols := []*plugin.Column{}
 	for i, column := range tableSchema {
 		columnName, ok := column["name"].(string)
 		if !ok {
 			plugin.Logger(ctx).Error("Failed to assert column name as string", "column", column)
 			continue
-		}
-
-		if i == 0 {
-			primaryKeyColumn = columnName
 		}
 
 		columnTypeStr, ok := column["type"].(string)
@@ -44,12 +40,18 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 		}
 
 		columnType, exists := typeMapping[columnTypeStr]
+		// default to UNKNOWN if type is not in the mapping
 		if !exists {
 			plugin.Logger(ctx).Error("Column type not found in mapping. Defaulting to UNKNOWN", "column", column)
-			columnType = proto.ColumnType_UNKNOWN // Default to UNKNOWN if type is not in the mapping
+			columnType = proto.ColumnType_UNKNOWN
 		}
 
 		cols = append(cols, &plugin.Column{Name: columnName, Type: columnType, Transform: transform.FromField(columnName)})
+
+		// use the first col in case no primary key is set
+		if i == 0 {
+			primaryKeyColumn = columnName
+		}
 
 		pkVal, ok := column["pk"].(string)
 		if ok {
@@ -59,76 +61,77 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 		}
 	}
 
-	plugin.Logger(ctx).Info("PK Col set:", primaryKeyColumn)
-
 	return &plugin.Table{
 		Name:        tablename,
 		Description: fmt.Sprintf("osquery table: %s", tablename),
-		/*List: &plugin.ListConfig{
-			Hydrate: listOsqueryTable(tablename),
-		},*/
+		List: &plugin.ListConfig{
+			Hydrate: listOsqueryTable,
+		},
 		Get: &plugin.GetConfig{
 			KeyColumns: plugin.SingleColumn(primaryKeyColumn),
-			Hydrate:    getOsqueryTable(tablename, primaryKeyColumn),
+			Hydrate:    getOsqueryTable,
 		},
 		Columns: cols,
 	}
 }
 
-func listOsqueryTable(tablename string) func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-	return func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+func listOsqueryTable(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 
-		var jsonData string
-		if len(d.QueryContext.UnsafeQuals) > 0 {
-			qualString := qualMapToString(d.QueryContext.UnsafeQuals)
-			jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
-		} else {
-			jsonData = retrieveJSONDataForTable(ctx, tablename, "")
-		}
+	tablename := d.Table.Name
+	plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
+	plugin.Logger(ctx).Info("Quals", d.Quals)
+	plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
 
-		var rows []map[string]interface{}
-		err := json.Unmarshal([]byte(jsonData), &rows)
-		if err != nil {
-			plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
-			panic(err)
-		}
-
-		for _, row := range rows {
-			d.StreamListItem(ctx, row)
-		}
-
-		return nil, nil
+	var jsonData string
+	if len(d.QueryContext.UnsafeQuals) > 0 {
+		qualString := qualMapToString(d.QueryContext.UnsafeQuals)
+		jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
+	} else {
+		jsonData = retrieveJSONDataForTable(ctx, tablename, "")
 	}
+
+	var rows []map[string]interface{}
+	err := json.Unmarshal([]byte(jsonData), &rows)
+	if err != nil {
+		plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
+		panic(err)
+	}
+
+	for _, row := range rows {
+		d.StreamListItem(ctx, row)
+	}
+
+	return nil, nil
 }
 
-func getOsqueryTable(tablename string, pkCol string) func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-	return func(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+func getOsqueryTable(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 
-		var jsonData string
-		if len(d.Quals) > 0 {
-			qualString, err := equalQualsTransform(d.EqualsQuals.String())
-			if err == nil {
-				jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
-			}
-		} else {
-			jsonData = retrieveJSONDataForTable(ctx, tablename, "")
+	tablename := d.Table.Name
+
+	var jsonData string
+	if len(d.Quals) > 0 {
+		qualString, err := equalQualsTransform(d.EqualsQuals.String())
+		if err == nil {
+			jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
 		}
-
-		var rows []map[string]interface{}
-		err := json.Unmarshal([]byte(jsonData), &rows)
-		if err != nil {
-			plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
-			return nil, err
-		}
-		if len(rows) == 0 {
-			plugin.Logger(ctx).Error("row is nil")
-			return nil, errors.New("Row data is nil")
-		}
-
-		row := rows[0]
-
-		return row, nil
+	} else {
+		jsonData = retrieveJSONDataForTable(ctx, tablename, "")
 	}
+
+	var rows []map[string]interface{}
+	err := json.Unmarshal([]byte(jsonData), &rows)
+	if err != nil {
+		plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
+		return nil, err
+	}
+	if len(rows) == 0 {
+		plugin.Logger(ctx).Error("row is nil")
+		return nil, errors.New("Row data is nil")
+	}
+
+	row := rows[0]
+
+	return row, nil
 }
 
 func qualMapToString(qualMap map[string]*proto.Quals) string {

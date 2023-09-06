@@ -1,6 +1,7 @@
 // logging
 
 plugin.Logger(ctx).Info("tableJSONDebug, cols:", d.QueryContext.Columns)
+plugin.Logger(ctx).Info("something")
 
 // .tables
 SELECT name FROM osquery_registry WHERE registry='table'
@@ -34,3 +35,13 @@ func QualToString(ctx context.Context, q *proto.Qual) string {
 
 // Known Bugs
 select * from file where "path"='/etc/passwd' or "path" = '/etc/shadow'
+TODO:
+--> Steampipe Slack Channel: "or" + "client.stop"
+Next Steps:
+- custom command in conf
+- später: ssh spezifisch implementieren
+- ssh: entweder ssh-agent oder controlpath für interaktive Auth
+- client.stop potenziell über ctx 
+- table definition more general
+- review everything (logging, error handling, code optimization)
+[x] client provisorisch in internal --> langfristig eigenes modul 

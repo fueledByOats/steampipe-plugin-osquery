@@ -1,17 +1,14 @@
 package osquery
 
 import (
-	"bufio"
 	"context"
+	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"strings"
+	osquery "steampipe-plugin-osquery/internal"
 	"sync"
 
-	"github.com/creack/pty"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 )
@@ -26,31 +23,24 @@ var typeMapping = map[string]proto.ColumnType{
 }
 
 var (
-	once sync.Once
-	//singletonClient *client.Client
-	singletonClient *Client
+	once            sync.Once
+	singletonClient *osquery.Client
 	clientMutex     sync.Mutex
 	clientInitErr   error
+	// tablesMap is used to store parsed json table schema data
+	tablesMap map[string]string
+	isLoaded  bool
+	loadOnce  sync.Once
+	// Embed the data.json file
+	//go:embed osquery_schemas.json
+	jsonData []byte
 )
 
-const (
-	ExitString = "exit"
-)
-
-type Query struct {
-	SQL string `json:"query"`
-}
-
-type Result struct {
-	Data json.RawMessage `json:"data"`
-}
-
-type Client struct {
-	ptmx0  *os.File
-	ptmx1  *os.File
-	ptmx2  *os.File
-	ctx    context.Context
-	cancel context.CancelFunc
+// Table represents the structure of the table in the JSON file
+type Table struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Examples    []string `json:"examples"`
 }
 
 func retrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
@@ -62,7 +52,7 @@ func retrieveJSONDataForTable(ctx context.Context, tablename string, quals strin
 	if quals != "" {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, quals)
 	}
-	result, err := client.SendQuery(ctx, query)
+	result, err := client.SendQuery(query)
 
 	clientMutex.Unlock()
 
@@ -75,20 +65,13 @@ func retrieveJSONDataForTable(ctx context.Context, tablename string, quals strin
 }
 
 func retrieveOsqueryTableNames(ctx context.Context) []string {
-	client := Client{}
-	err := client.Start(ctx, "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
+	client := getClient(ctx)
+
+	result, err := client.SendQuery("SELECT name FROM osquery_registry WHERE registry='table'")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return nil
 	}
-
-	result, err := client.SendQuery(ctx, "SELECT name FROM osquery_registry WHERE registry='table'")
-	if err != nil {
-		fmt.Println("Error:", err)
-		return nil
-	}
-
-	client.Stop()
 
 	var tables []map[string]string
 	err = json.Unmarshal(result.Data, &tables)
@@ -113,7 +96,7 @@ func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[strin
 	client := getClient(ctx)
 
 	query := fmt.Sprintf("PRAGMA table_info(%s);", tablename)
-	result, err := client.SendQuery(ctx, query)
+	result, err := client.SendQuery(query)
 
 	clientMutex.Unlock()
 
@@ -150,102 +133,47 @@ func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[strin
 	return colDefs, nil
 }
 
-func (c *Client) Start(ctx context.Context, command string) error {
+// retrieves the description for a given table name
+func getTableDescription(ctx context.Context, name string) (string, bool) {
+	// Ensure LoadJSON is called only once
+	loadOnce.Do(func() {
+		if !isLoaded {
+			if err := LoadJSON(); err != nil {
+				panic("Error loading JSON: " + err.Error())
+			}
+			isLoaded = true
+		}
+	})
 
-	c.ctx, c.cancel = context.WithCancel(context.Background())
+	description, exists := tablesMap[name]
+	return description, exists
+}
 
-	// needed to create osquery socket
-	cmd1 := exec.Command("osqueryi", "--nodisable_extensions")
-	var err error
-	c.ptmx1, err = startCommandWithPty(cmd1)
-	if err != nil {
-		return fmt.Errorf("failed to start cmd1: %v", err)
+// LoadJSON loads and parses the JSON file into tablesMap
+func LoadJSON() error {
+	if jsonData == nil {
+		return errors.New("embedded JSON data is nil")
 	}
 
-	// Split the command string into command and arguments
-	cmdArgs := strings.Split(command, " ")
-	cmd2 := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-	c.ptmx2, err = startCommandWithPty(cmd2)
-	if err != nil {
-		return fmt.Errorf("failed to start cmd2: %v", err)
+	// Parse the embedded JSON data
+	var tables []Table
+	if err := json.Unmarshal(jsonData, &tables); err != nil {
+		return err
+	}
+
+	// Store the parsed data in tablesMap
+	tablesMap = make(map[string]string)
+	for _, table := range tables {
+		tablesMap[table.Name] = table.Description
 	}
 
 	return nil
 }
 
-func (c *Client) SendQuery(ctx context.Context, sql string) (*Result, error) {
-	query := &Query{SQL: sql}
-	encoder := json.NewEncoder(c.ptmx2)
-	if err := encoder.Encode(query); err != nil {
-		return nil, err
-	}
-
-	_, err := c.ptmx2.Write([]byte("\n"))
-	if err != nil {
-		return nil, err
-	}
-
-	// Wait for the response
-	var response string
-	scanner := bufio.NewScanner(c.ptmx2)
-	for scanner.Scan() {
-		line := scanner.Text()
-		plugin.Logger(ctx).Info("Received:", line)
-		if strings.HasPrefix(line, "{\"data\"") {
-			response = line
-			break
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		// Log the error but don't immediately return if you have a valid response
-		fmt.Println("Scanner error:", err)
-	}
-
-	if response != "" {
-		return parseOsqueryResult(strings.NewReader(response)), nil
-	}
-
-	return nil, fmt.Errorf("no valid response received")
-}
-
-func (c *Client) Stop() {
-	if c.cancel != nil {
-		c.cancel()
-	}
-	if c.ptmx1 != nil {
-		c.ptmx1.Close()
-	}
-	if c.ptmx2 != nil {
-		c.ptmx2.Close()
-	}
-}
-
-func parseOsqueryResult(r io.Reader) *Result {
-	decoder := json.NewDecoder(r)
-	result := &Result{}
-	if err := decoder.Decode(result); err != nil {
-		fmt.Println("Error decoding osquery result:", err)
-		return nil
-	}
-
-	return result
-}
-
-func startCommandWithPty(cmd *exec.Cmd) (*os.File, error) {
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	return ptmx, nil
-}
-
-func getClient(ctx context.Context) *Client {
+func getClient(ctx context.Context) *osquery.Client {
 	once.Do(func() {
-		singletonClient = &Client{}
-		//singletonClient = &client.Client{}
-		clientInitErr = singletonClient.Start(ctx, "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
+		singletonClient = &osquery.Client{}
+		clientInitErr = singletonClient.Start("/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
 		if clientInitErr != nil {
 			plugin.Logger(ctx).Info("Error initializing client:", clientInitErr)
 		}

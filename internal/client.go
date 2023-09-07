@@ -25,36 +25,43 @@ type Result struct {
 	Data json.RawMessage `json:"data"`
 }
 
+type ClientConfig struct {
+	OsqueryCommand   string
+	ExtensionCommand string
+}
+
 type Client struct {
-	ptmx0  *os.File
+	config *ClientConfig
 	ptmx1  *os.File
 	ptmx2  *os.File
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-func (c *Client) Start(osquery_command string, extension_command string) error {
+func NewClient(cfg *ClientConfig) (*Client, error) {
+
+	c := &Client{
+		config: cfg,
+	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	// needed to create osquery socket
-	cmd1Args := strings.Split(osquery_command, " ")
+	cmd1Args := strings.Split(cfg.OsqueryCommand, " ")
 	cmd1 := exec.Command(cmd1Args[0], cmd1Args[1:]...)
 	var err error
 	c.ptmx1, err = pty.Start(cmd1)
 	if err != nil {
-		return fmt.Errorf("failed to start cmd1: %v", err)
+		return nil, fmt.Errorf("failed to start cmd1: %v", err)
 	}
 
-	// Split the command string into command and arguments
-	cmd2Args := strings.Split(extension_command, " ")
+	cmd2Args := strings.Split(cfg.ExtensionCommand, " ")
 	cmd2 := exec.Command(cmd2Args[0], cmd2Args[1:]...)
 	c.ptmx2, err = pty.Start(cmd2)
 	if err != nil {
-		return fmt.Errorf("failed to start cmd2: %v", err)
+		return nil, fmt.Errorf("failed to start cmd2: %v", err)
 	}
 
-	return nil
+	return c, nil
 }
 
 func (c *Client) SendQuery(sql string) (*Result, error) {

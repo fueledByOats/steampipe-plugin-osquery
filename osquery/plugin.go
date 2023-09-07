@@ -9,7 +9,11 @@ import (
 
 func Plugin(ctx context.Context) *plugin.Plugin {
 	p := &plugin.Plugin{
-		Name:             "steampipe-plugin-osquery",
+		Name: "steampipe-plugin-osquery",
+		ConnectionConfigSchema: &plugin.ConnectionConfigSchema{
+			NewInstance: ConfigInstance,
+			Schema:      ConfigSchema,
+		},
 		DefaultTransform: transform.FromGo().NullIfZero(),
 		SchemaMode:       plugin.SchemaModeDynamic,
 		TableMapFunc:     PluginTables,
@@ -21,14 +25,12 @@ func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plug
 	tables := map[string]*plugin.Table{}
 
 	// retrieve all osquery table names
-	osqueryTableNames := retrieveOsqueryTableNames(ctx)
+	osqueryTableNames := retrieveOsqueryTableNames(ctx, d.Connection, d.ConnectionCache)
 
 	// Create a table for each osquery table
 	for _, tablename := range osqueryTableNames {
-		tables[tablename] = tableOsquery(ctx, tablename)
+		tables[tablename] = tableOsquery(ctx, d.Connection, d.ConnectionCache, tablename)
 	}
-
-	plugin.Logger(ctx).Info("PluginTablesDebug, ctx:", ctx)
 
 	return tables, nil
 }

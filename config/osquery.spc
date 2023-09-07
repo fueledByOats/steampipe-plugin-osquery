@@ -1,5 +1,5 @@
 connection "osquery" {
-  plugin = "steampipe-plugin-osquery"
+  plugin = "local/osquery"
 
   # needed to create the osqueryi extension socket
   osquery_command = "osqueryi --nodisable-extensions"

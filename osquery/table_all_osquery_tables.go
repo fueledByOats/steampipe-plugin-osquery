@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/turbot/steampipe-plugin-sdk/v5/connection"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
 )
 
-func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
+func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string) *plugin.Table {
 
 	// retrieve table schema
-	tableSchema, err := retrieveTableDefinition(ctx, tablename)
+	tableSchema, err := retrieveTableDefinition(ctx, c, cc, tablename)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error retrieving table definition:", "err", err)
 		panic(err)
@@ -91,9 +92,9 @@ func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrat
 	var jsonData string
 	if len(d.QueryContext.UnsafeQuals) > 0 {
 		qualString := qualMapToString(d.QueryContext.UnsafeQuals)
-		jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
+		jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, qualString)
 	} else {
-		jsonData = retrieveJSONDataForTable(ctx, tablename, "")
+		jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, "")
 	}
 
 	var rows []map[string]interface{}
@@ -118,10 +119,10 @@ func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrate
 	if len(d.Quals) > 0 {
 		qualString, err := equalQualsTransform(d.EqualsQuals.String())
 		if err == nil {
-			jsonData = retrieveJSONDataForTable(ctx, tablename, qualString)
+			jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, qualString)
 		}
 	} else {
-		jsonData = retrieveJSONDataForTable(ctx, tablename, "")
+		jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, "")
 	}
 
 	var rows []map[string]interface{}

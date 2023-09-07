@@ -9,6 +9,7 @@ import (
 	osquery "steampipe-plugin-osquery/internal"
 	"sync"
 
+	"github.com/turbot/steampipe-plugin-sdk/v5/connection"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 )
@@ -43,14 +44,46 @@ type Table struct {
 	Examples    []string `json:"examples"`
 }
 
-func connect(ctx context.Context, d *plugin.QueryData) *osquery.Client {
-	return nil
+func connect(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) (*osquery.Client, error) {
+	// Load connection from cache if a client was already initialized
+	cacheKey := c.Name
+	if cachedData, ok := cc.Get(ctx, cacheKey); ok {
+		return cachedData.(*osquery.Client), nil
+	}
+
+	// Prefer config settings
+	osqueryConfig := GetConfig(c)
+
+	// Error if the minimum config is not set
+	if *osqueryConfig.OsqueryCommand == "" {
+		return nil, errors.New("osquery_command must be configured")
+	}
+	if *osqueryConfig.OsqueryExtensionCommand == "" {
+		return nil, errors.New("osquery_extension_command must be configured")
+	}
+
+	osqueryCommand := *osqueryConfig.OsqueryCommand
+	osqueryExtensionCommand := *osqueryConfig.OsqueryExtensionCommand
+
+	cfg := &osquery.ClientConfig{
+		OsqueryCommand:   osqueryCommand,
+		ExtensionCommand: osqueryExtensionCommand,
+	}
+
+	conn, err := osquery.NewClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save to cache
+	cc.Set(ctx, cacheKey, conn)
+	return conn, nil
 }
 
-func retrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
+func retrieveJSONDataForTable(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string, quals string) string {
 	clientMutex.Lock()
 
-	client := getClient(ctx)
+	client := getClient(ctx, c, cc)
 
 	query := fmt.Sprintf("SELECT * FROM %s", tablename)
 	if quals != "" {
@@ -68,8 +101,8 @@ func retrieveJSONDataForTable(ctx context.Context, tablename string, quals strin
 	}
 }
 
-func retrieveOsqueryTableNames(ctx context.Context) []string {
-	client := getClient(ctx)
+func retrieveOsqueryTableNames(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) []string {
+	client := getClient(ctx, c, cc)
 
 	result, err := client.SendQuery("SELECT name FROM osquery_registry WHERE registry='table'")
 	if err != nil {
@@ -92,12 +125,12 @@ func retrieveOsqueryTableNames(ctx context.Context) []string {
 	return tableNames
 }
 
-func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[string]interface{}, error) {
+func retrieveTableDefinition(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string) ([]map[string]interface{}, error) {
 	jsonData := ""
 
 	clientMutex.Lock()
 
-	client := getClient(ctx)
+	client := getClient(ctx, c, cc)
 
 	query := fmt.Sprintf("PRAGMA table_info(%s);", tablename)
 	result, err := client.SendQuery(query)
@@ -157,10 +190,11 @@ func LoadJSON() error {
 	return nil
 }
 
-func getClient(ctx context.Context) *osquery.Client {
+func getClient(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) *osquery.Client {
 	once.Do(func() {
-		singletonClient = &osquery.Client{}
-		clientInitErr = singletonClient.Start("osqueryi --nodisable_extensions", "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
+		singletonClient, clientInitErr = connect(ctx, c, cc)
+		//singletonClient = &osquery.Client{}
+		//clientInitErr = singletonClient.Start("osqueryi --nodisable_extensions", "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
 		if clientInitErr != nil {
 			plugin.Logger(ctx).Info("Error initializing client:", clientInitErr)
 		}
@@ -170,4 +204,8 @@ func getClient(ctx context.Context) *osquery.Client {
 		return nil
 	}
 	return singletonClient
+}
+
+func isNotFoundError(err error) bool {
+	return err.Error() == "resource not found"
 }

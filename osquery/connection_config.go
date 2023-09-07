@@ -6,11 +6,15 @@ import (
 )
 
 type osqueryConfig struct {
-	Token        *string `cty:"test"`
+	OsqueryCommand          *string `cty:"osquery_command"`
+	OsqueryExtensionCommand *string `cty:"osquery_extension_command"`
 }
 
 var ConfigSchema = map[string]*schema.Attribute{
-	"test": {
+	"osquery_command": {
+		Type: schema.TypeString,
+	},
+	"osquery_extension_command": {
 		Type: schema.TypeString,
 	},
 }

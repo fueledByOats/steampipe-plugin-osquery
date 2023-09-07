@@ -33,12 +33,13 @@ type Client struct {
 	cancel context.CancelFunc
 }
 
-func (c *Client) Start(command string) error {
+func (c *Client) Start(osquery_command string, extension_command string) error {
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
 	// needed to create osquery socket
-	cmd1 := exec.Command("osqueryi", "--nodisable_extensions")
+	cmd1Args := strings.Split(osquery_command, " ")
+	cmd1 := exec.Command(cmd1Args[0], cmd1Args[1:]...)
 	var err error
 	c.ptmx1, err = pty.Start(cmd1)
 	if err != nil {
@@ -46,8 +47,8 @@ func (c *Client) Start(command string) error {
 	}
 
 	// Split the command string into command and arguments
-	cmdArgs := strings.Split(command, " ")
-	cmd2 := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	cmd2Args := strings.Split(extension_command, " ")
+	cmd2 := exec.Command(cmd2Args[0], cmd2Args[1:]...)
 	c.ptmx2, err = pty.Start(cmd2)
 	if err != nil {
 		return fmt.Errorf("failed to start cmd2: %v", err)

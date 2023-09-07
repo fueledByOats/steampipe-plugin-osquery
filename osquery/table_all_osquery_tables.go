@@ -81,7 +81,7 @@ func tableOsquery(ctx context.Context, tablename string) *plugin.Table {
 	}
 }
 
-func listOsqueryTable(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
 
 	tablename := d.Table.Name
 	plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
@@ -110,7 +110,7 @@ func listOsqueryTable(ctx context.Context, d *plugin.QueryData, h *plugin.Hydrat
 	return nil, nil
 }
 
-func getOsqueryTable(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
+func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
 
 	tablename := d.Table.Name
 
@@ -178,10 +178,11 @@ func qualToString(q *proto.Qual) string {
 	return "\"" + fieldName + "\" " + operator + " \"" + fmt.Sprintf("%v", value) + "\""
 }
 
+// transform 'select * from table where ab = cd' to 'select * from table where "ab" = "cd"
 func equalQualsTransform(input string) (string, error) {
 	parts := strings.Split(input, "=")
 	if len(parts) != 2 {
-		return input, errors.New("Invalid String") // return the original string if it doesn't match the expected format
+		return input, errors.New("Invalid String")
 	}
 
 	key := strings.TrimSpace(parts[0])

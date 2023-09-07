@@ -38,10 +38,10 @@ select * from file where "path"='/etc/passwd' or "path" = '/etc/shadow'
 TODO:
 --> Steampipe Slack Channel: "or" + "client.stop"
 Next Steps:
-- custom command in conf
-- später: ssh spezifisch implementieren
+- custom command in connection conf
 - ssh: entweder ssh-agent oder controlpath für interaktive Auth
 - client.stop potenziell über ctx 
-- table definition more general
 - review everything (logging, error handling, code optimization)
-[x] client provisorisch in internal --> langfristig eigenes modul 
+[o] client provisorisch in internal --> langfristig eigenes modul 
+[x] table descriptions
+[x] table definition more general

@@ -43,6 +43,10 @@ type Table struct {
 	Examples    []string `json:"examples"`
 }
 
+func connect(ctx context.Context, d *plugin.QueryData) *osquery.Client {
+	return nil
+}
+
 func retrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
 	clientMutex.Lock()
 
@@ -106,31 +110,14 @@ func retrieveTableDefinition(ctx context.Context, tablename string) ([]map[strin
 		jsonData = string(result.Data)
 	}
 
-	var tableDef []map[string]string
+	var tableDef []map[string]interface{} // Change the type to interface{} for more generality
 	err = json.Unmarshal([]byte(jsonData), &tableDef)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error unmarshalling:", "err", err)
 		return nil, err
 	}
 
-	var colDefs []map[string]interface{}
-	for _, table := range tableDef {
-		col := make(map[string]interface{})
-		if name, ok := table["name"]; ok {
-			col["name"] = name
-		}
-		if colType, ok := table["type"]; ok {
-			col["type"] = colType
-		}
-		if pk, ok := table["pk"]; ok {
-			if err == nil {
-				col["pk"] = pk
-			}
-		}
-		colDefs = append(colDefs, col)
-	}
-
-	return colDefs, nil
+	return tableDef, nil
 }
 
 // retrieves the description for a given table name
@@ -173,7 +160,7 @@ func LoadJSON() error {
 func getClient(ctx context.Context) *osquery.Client {
 	once.Do(func() {
 		singletonClient = &osquery.Client{}
-		clientInitErr = singletonClient.Start("/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
+		clientInitErr = singletonClient.Start("osqueryi --nodisable_extensions", "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
 		if clientInitErr != nil {
 			plugin.Logger(ctx).Info("Error initializing client:", clientInitErr)
 		}

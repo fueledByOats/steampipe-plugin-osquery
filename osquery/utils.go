@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	osquery "steampipe-plugin-osquery/internal"
-	"sync"
 
 	"github.com/turbot/steampipe-plugin-sdk/v5/connection"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
@@ -22,19 +21,8 @@ var typeMapping = map[string]proto.ColumnType{
 	"DOUBLE":          proto.ColumnType_DOUBLE,
 }
 
-var (
-	once            sync.Once
-	singletonClient *osquery.Client
-	clientMutex     sync.Mutex
-	clientInitErr   error
-	// tablesMap is used to store parsed json table schema data
-	tablesMap map[string]string
-	isLoaded  bool
-	loadOnce  sync.Once
-	// Embed the data.json file
-	//go:embed osquery_schemas.json
-	jsonData []byte
-)
+//go:embed osquery_schemas.json
+var jsonData []byte
 
 // Table represents the structure of the table in the JSON file
 type Table struct {
@@ -80,58 +68,52 @@ func connect(ctx context.Context, c *plugin.Connection, cc *connection.Connectio
 }
 
 // retrieves the description for a given table name
-func getTableDescription(ctx context.Context, name string) (string, bool) {
-	// Ensure LoadJSON is called only once
-	loadOnce.Do(func() {
-		if !isLoaded {
-			if err := LoadJSON(); err != nil {
-				panic("Error loading JSON: " + err.Error())
-			}
-			isLoaded = true
-		}
-	})
+func getTableDescription(ctx context.Context, cc *connection.ConnectionCache, name string) (string, bool) {
+	tablesMap, err := getTablesMap(ctx, cc)
+	if err != nil {
+		plugin.Logger(ctx).Error("Error retrieving tables map:", "err", err)
+		return "", false
+	}
 
 	description, exists := tablesMap[name]
 	return description, exists
 }
 
+// getTablesMap retrieves the tablesMap from the cache or loads it if not present
+func getTablesMap(ctx context.Context, cc *connection.ConnectionCache) (map[string]string, error) {
+	cacheKey := "tablesMap"
+	if cachedData, ok := cc.Get(ctx, cacheKey); ok {
+		return cachedData.(map[string]string), nil
+	}
+
+	// Load the JSON data
+	tablesMap, err := LoadJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	// Save to cache
+	cc.Set(ctx, cacheKey, tablesMap)
+	return tablesMap, nil
+}
+
 // LoadJSON loads and parses the JSON file into tablesMap
-func LoadJSON() error {
+func LoadJSON() (map[string]string, error) {
 	if jsonData == nil {
-		return errors.New("embedded JSON data is nil")
+		return nil, errors.New("embedded JSON data is nil")
 	}
 
 	// Parse the embedded JSON data
 	var tables []Table
 	if err := json.Unmarshal(jsonData, &tables); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Store the parsed data in tablesMap
-	tablesMap = make(map[string]string)
+	tablesMap := make(map[string]string)
 	for _, table := range tables {
 		tablesMap[table.Name] = table.Description
 	}
 
-	return nil
-}
-
-func getClient(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) *osquery.Client {
-	once.Do(func() {
-		singletonClient, clientInitErr = connect(ctx, c, cc)
-		//singletonClient = &osquery.Client{}
-		//clientInitErr = singletonClient.Start("osqueryi --nodisable_extensions", "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em")
-		if clientInitErr != nil {
-			plugin.Logger(ctx).Info("Error initializing client:", clientInitErr)
-		}
-	})
-
-	if clientInitErr != nil {
-		return nil
-	}
-	return singletonClient
-}
-
-func isNotFoundError(err error) bool {
-	return err.Error() == "resource not found"
+	return tablesMap, nil
 }

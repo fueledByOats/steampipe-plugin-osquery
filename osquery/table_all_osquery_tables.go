@@ -68,7 +68,7 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 	}
 
 	// get table description
-	tableDescription, exists := getTableDescription(ctx, tablename)
+	tableDescription, exists := getTableDescription(ctx, cc, tablename)
 	if !exists || tableDescription == "" {
 		tableDescription = fmt.Sprintf("osquery table: %s", tablename)
 	}

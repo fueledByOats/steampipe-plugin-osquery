@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/creack/pty"
+	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 )
 
 const (
@@ -97,6 +98,65 @@ func (c *Client) SendQuery(sql string) (*Result, error) {
 	}
 
 	return nil, fmt.Errorf("no valid response received")
+}
+
+func (c *Client) RetrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
+	query := fmt.Sprintf("SELECT * FROM %s", tablename)
+	if quals != "" {
+		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, quals)
+	}
+	result, err := c.SendQuery(query)
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return ""
+	} else {
+		return string(result.Data)
+	}
+}
+
+func (c *Client) RetrieveOsqueryTableNames(ctx context.Context) []string {
+	result, err := c.SendQuery("SELECT name FROM osquery_registry WHERE registry='table'")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return nil
+	}
+
+	var tables []map[string]string
+	err = json.Unmarshal(result.Data, &tables)
+	if err != nil {
+		fmt.Println("Error unmarshalling:", err)
+		return nil
+	}
+
+	var tableNames []string
+	for _, table := range tables {
+		tableNames = append(tableNames, table["name"])
+	}
+
+	return tableNames
+}
+
+func (c *Client) RetrieveTableDefinition(ctx context.Context, tablename string) ([]map[string]interface{}, error) {
+	jsonData := ""
+
+	query := fmt.Sprintf("PRAGMA table_info(%s);", tablename)
+	result, err := c.SendQuery(query)
+
+	if err != nil {
+		jsonData = "{\"data\":[{\"name\":\"error\"}]"
+	} else {
+		jsonData = string(result.Data)
+	}
+
+	var tableDef []map[string]interface{} // Change the type to interface{} for more generality
+	err = json.Unmarshal([]byte(jsonData), &tableDef)
+	if err != nil {
+		plugin.Logger(ctx).Error("Error unmarshalling:", "err", err)
+		return nil, err
+	}
+
+	return tableDef, nil
 }
 
 func (c *Client) Stop() {

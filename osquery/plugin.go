@@ -24,12 +24,20 @@ func Plugin(ctx context.Context) *plugin.Plugin {
 func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plugin.Table, error) {
 	tables := map[string]*plugin.Table{}
 
+	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
+	if err != nil {
+		return nil, err
+	}
+
 	// retrieve all osquery table names
-	osqueryTableNames := retrieveOsqueryTableNames(ctx, d.Connection, d.ConnectionCache)
+	osqueryTableNames := conn.RetrieveOsqueryTableNames(ctx)
 
 	// Create a table for each osquery table
 	for _, tablename := range osqueryTableNames {
-		tables[tablename] = tableOsquery(ctx, d.Connection, d.ConnectionCache, tablename)
+		tables[tablename], err = tableOsquery(ctx, d.Connection, d.ConnectionCache, tablename)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return tables, nil

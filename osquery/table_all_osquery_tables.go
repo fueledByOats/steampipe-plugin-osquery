@@ -14,10 +14,15 @@ import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
 )
 
-func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string) *plugin.Table {
+func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string) (*plugin.Table, error) {
+
+	conn, err := connect(ctx, c, cc)
+	if err != nil {
+		return nil, err
+	}
 
 	// retrieve table schema
-	tableSchema, err := retrieveTableDefinition(ctx, c, cc, tablename)
+	tableSchema, err := conn.RetrieveTableDefinition(ctx, tablename)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error retrieving table definition:", "err", err)
 		panic(err)
@@ -79,26 +84,32 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 			Hydrate:    getOsqueryTable,
 		},
 		Columns: cols,
-	}
+	}, nil
 }
 
 func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
-
-	tablename := d.Table.Name
+	//  to be removed
 	plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
 	plugin.Logger(ctx).Info("Quals", d.Quals)
 	plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
 
+	tablename := d.Table.Name
+
+	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
+	if err != nil {
+		return nil, err
+	}
+
 	var jsonData string
 	if len(d.QueryContext.UnsafeQuals) > 0 {
 		qualString := qualMapToString(d.QueryContext.UnsafeQuals)
-		jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, qualString)
+		jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, qualString)
 	} else {
-		jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, "")
+		jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, "")
 	}
 
 	var rows []map[string]interface{}
-	err := json.Unmarshal([]byte(jsonData), &rows)
+	err = json.Unmarshal([]byte(jsonData), &rows)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
 		panic(err)
@@ -115,18 +126,23 @@ func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrate
 
 	tablename := d.Table.Name
 
+	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
+	if err != nil {
+		return nil, err
+	}
+
 	var jsonData string
 	if len(d.Quals) > 0 {
 		qualString, err := equalQualsTransform(d.EqualsQuals.String())
 		if err == nil {
-			jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, qualString)
+			jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, qualString)
 		}
 	} else {
-		jsonData = retrieveJSONDataForTable(ctx, d.Connection, d.ConnectionCache, tablename, "")
+		jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, "")
 	}
 
 	var rows []map[string]interface{}
-	err := json.Unmarshal([]byte(jsonData), &rows)
+	err = json.Unmarshal([]byte(jsonData), &rows)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
 		return nil, err

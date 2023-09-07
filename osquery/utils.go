@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	osquery "steampipe-plugin-osquery/internal"
 	"sync"
 
@@ -78,79 +77,6 @@ func connect(ctx context.Context, c *plugin.Connection, cc *connection.Connectio
 	// Save to cache
 	cc.Set(ctx, cacheKey, conn)
 	return conn, nil
-}
-
-func retrieveJSONDataForTable(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string, quals string) string {
-	clientMutex.Lock()
-
-	client := getClient(ctx, c, cc)
-
-	query := fmt.Sprintf("SELECT * FROM %s", tablename)
-	if quals != "" {
-		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, quals)
-	}
-	result, err := client.SendQuery(query)
-
-	clientMutex.Unlock()
-
-	if err != nil {
-		fmt.Println("Error:", err)
-		return ""
-	} else {
-		return string(result.Data)
-	}
-}
-
-func retrieveOsqueryTableNames(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) []string {
-	client := getClient(ctx, c, cc)
-
-	result, err := client.SendQuery("SELECT name FROM osquery_registry WHERE registry='table'")
-	if err != nil {
-		fmt.Println("Error:", err)
-		return nil
-	}
-
-	var tables []map[string]string
-	err = json.Unmarshal(result.Data, &tables)
-	if err != nil {
-		fmt.Println("Error unmarshalling:", err)
-		return nil
-	}
-
-	var tableNames []string
-	for _, table := range tables {
-		tableNames = append(tableNames, table["name"])
-	}
-
-	return tableNames
-}
-
-func retrieveTableDefinition(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache, tablename string) ([]map[string]interface{}, error) {
-	jsonData := ""
-
-	clientMutex.Lock()
-
-	client := getClient(ctx, c, cc)
-
-	query := fmt.Sprintf("PRAGMA table_info(%s);", tablename)
-	result, err := client.SendQuery(query)
-
-	clientMutex.Unlock()
-
-	if err != nil {
-		jsonData = "{\"data\":[{\"name\":\"error\"}]"
-	} else {
-		jsonData = string(result.Data)
-	}
-
-	var tableDef []map[string]interface{} // Change the type to interface{} for more generality
-	err = json.Unmarshal([]byte(jsonData), &tableDef)
-	if err != nil {
-		plugin.Logger(ctx).Error("Error unmarshalling:", "err", err)
-		return nil, err
-	}
-
-	return tableDef, nil
 }
 
 // retrieves the description for a given table name

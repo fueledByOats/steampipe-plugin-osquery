@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	ExitString = "exit"
+	ExitString    = "exit"
+	maxBufferSize = 512 * 1024 // 512KB
 )
 
 type Query struct {
@@ -82,6 +83,11 @@ func (c *Client) SendQuery(sql string) (*Result, error) {
 	// Wait for the response
 	var response string
 	scanner := bufio.NewScanner(c.ptmx2)
+
+	// Increase the buffer size
+	buf := make([]byte, 0, maxBufferSize)
+	scanner.Buffer(buf, maxBufferSize)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "{\"data\"") {

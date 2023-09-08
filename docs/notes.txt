@@ -38,16 +38,19 @@ func QualToString(ctx context.Context, q *proto.Qual) string {
 
 // Known Bugs
 select * from file where "path"='/etc/passwd' or "path" = '/etc/shadow'
+description only in first connection
 TODO:
 --> Steampipe Slack Channel: "or" + "client.stop"
 Next Steps:
 - client.stop potenziell über ctx 
 - review everything (logging, error handling, code optimization)
-- qualstring transmission
-[o] client provisorisch in internal --> langfristig eigenes modul 
+- handle ssh banner and stuff
+[o] client provisorisch in internal --> langfristig eigenes modul?
 [x] table descriptions
+[x] column descriptions
 [x] table definition more general
 [x] custom command in connection conf
+[x] qualstring transmission
 
 // general
 - ssh: entweder ssh-agent oder controlpath für interaktive Auth

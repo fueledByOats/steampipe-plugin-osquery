@@ -9,12 +9,19 @@ def download_and_parse_json(url):
     # Parse the JSON data
     data = response.json()
 
-    # Extract the 'name', 'description', and 'examples' of each table
+    # Extract the 'name', 'description', 'examples', and 'columns' of each table
     filtered_data = [
         {
             "name": table["name"],
             "description": table["description"],
-            "examples": table["examples"]
+            "examples": table["examples"],
+            "columns": [
+                {
+                    "name": column["name"],
+                    "description": column["description"]
+                }
+                for column in table["columns"]
+            ]
         } 
         for table in data
     ]
@@ -23,6 +30,7 @@ def download_and_parse_json(url):
 
 def main():
     # URL of the JSON file to download
+    # Usually found here: https://raw.githubusercontent.com/osquery/osquery-site/source/src/data/osquery_schema_versions/X.X.X.json
     url = input("Enter the URL of the current osquery table schema json: ")
 
     # Get the filtered data

@@ -50,7 +50,13 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 			columnType = proto.ColumnType_UNKNOWN
 		}
 
-		cols = append(cols, &plugin.Column{Name: columnName, Type: columnType, Transform: transform.FromField(columnName)})
+		// get column description
+		columnDescription, exists := getTableOrColumnDescription(ctx, cc, tablename, columnName)
+		if !exists || columnDescription == "" {
+			columnDescription = fmt.Sprintf("No description available.")
+		}
+
+		cols = append(cols, &plugin.Column{Name: columnName, Type: columnType, Description: columnDescription, Transform: transform.FromField(columnName)})
 
 		// use the first col in case no primary key is set
 		if i == 0 {
@@ -66,7 +72,7 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 	}
 
 	// get table description
-	tableDescription, exists := getTableDescription(ctx, cc, tablename)
+	tableDescription, exists := getTableOrColumnDescription(ctx, cc, tablename, "")
 	if !exists || tableDescription == "" {
 		tableDescription = fmt.Sprintf("osquery table: %s", tablename)
 	}

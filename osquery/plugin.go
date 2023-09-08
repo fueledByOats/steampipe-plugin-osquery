@@ -32,7 +32,7 @@ func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plug
 	// retrieve all osquery table names
 	osqueryTableNames := conn.RetrieveOsqueryTableNames(ctx)
 
-	// Create a table for each osquery table
+	// create a table for each osquery table
 	for _, tablename := range osqueryTableNames {
 		tables[tablename], err = tableOsquery(ctx, d.Connection, d.ConnectionCache, tablename)
 	}

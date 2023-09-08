@@ -39,7 +39,7 @@ type Table struct {
 }
 
 func connect(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) (*osquery.Client, error) {
-	// Load connection from cache if a client was already initialized
+	// Load client from cache if a client was already initialized for this connection
 	cacheKey := c.Name
 	if cachedData, ok := cc.Get(ctx, cacheKey); ok {
 		return cachedData.(*osquery.Client), nil

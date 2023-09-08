@@ -16,10 +16,7 @@ import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 )
 
-const (
-	ExitString    = "exit"
-	maxBufferSize = 512 * 1024 // 512KB
-)
+const maxBufferSize = 512 * 1024 // 512KB
 
 type Query struct {
 	SQL string `json:"query"`
@@ -39,7 +36,6 @@ type Client struct {
 	ptmx1  *os.File
 	ptmx2  *os.File
 	ctx    context.Context
-	cancel context.CancelFunc
 }
 
 func NewClient(cfg *ClientConfig) (*Client, error) {
@@ -48,7 +44,7 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 		config: cfg,
 	}
 
-	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.ctx = context.Background()
 
 	cmd1Args := strings.Split(cfg.OsqueryCommand, " ")
 	cmd1 := exec.Command(cmd1Args[0], cmd1Args[1:]...)
@@ -179,9 +175,6 @@ func (c *Client) RetrieveTableDefinition(ctx context.Context, tablename string) 
 }
 
 func (c *Client) Stop() {
-	if c.cancel != nil {
-		c.cancel()
-	}
 	if c.ptmx1 != nil {
 		c.ptmx1.Close()
 	}

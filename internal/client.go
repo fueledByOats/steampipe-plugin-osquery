@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/creack/pty"
+	"github.com/turbot/steampipe-plugin-sdk/v5/grpc"
+	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 )
 
@@ -100,10 +102,21 @@ func (c *Client) SendQuery(sql string) (*Result, error) {
 	return nil, fmt.Errorf("no valid response received")
 }
 
-func (c *Client) RetrieveJSONDataForTable(ctx context.Context, tablename string, quals string) string {
+func (c *Client) RetrieveJSONDataForTable(ctx context.Context, d *plugin.QueryData) string {
+	tablename := d.Table.Name
+	qualString := ""
+
+	if len(d.QueryContext.UnsafeQuals) > 0 {
+		qualString = qualMapToString(d.QueryContext.UnsafeQuals)
+	}
+
+	if len(d.Quals) > 0 {
+		qualString = equalQualsTransform(d.EqualsQuals.String())
+	}
+
 	query := fmt.Sprintf("SELECT * FROM %s", tablename)
-	if quals != "" {
-		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, quals)
+	if qualString != "" {
+		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, qualString)
 	}
 	result, err := c.SendQuery(query)
 
@@ -180,4 +193,55 @@ func parseOsqueryResult(r io.Reader) *Result {
 	}
 
 	return result
+}
+
+func qualMapToString(qualMap map[string]*proto.Quals) string {
+	if len(qualMap) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	firstKey := true
+	for _, quals := range qualMap {
+		if !firstKey {
+			sb.WriteString(" and ")
+		} else {
+			firstKey = false
+		}
+
+		var qb strings.Builder
+		for i, q := range quals.GetQuals() {
+			str := qualToString(q)
+			qb.WriteString(str)
+			// if it's not the last qual, append "and"
+			if i < len(quals.GetQuals())-1 {
+				qb.WriteString(" and ")
+			}
+		}
+		sb.WriteString(qb.String())
+	}
+
+	return sb.String()
+}
+
+func qualToString(q *proto.Qual) string {
+	fieldName := q.FieldName
+	operator := q.GetStringValue()
+	value := grpc.GetQualValue(q.Value)
+
+	return "\"" + fieldName + "\" " + operator + " \"" + fmt.Sprintf("%v", value) + "\""
+}
+
+// transform 'ab = cd' to '"ab" = "cd"'
+func equalQualsTransform(input string) string {
+	parts := strings.Split(input, "=")
+	if len(parts) != 2 {
+		return ""
+	}
+
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[1])
+
+	return fmt.Sprintf(`"%s" = "%s"`, key, value)
 }

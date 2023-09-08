@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/turbot/steampipe-plugin-sdk/v5/connection"
-	"github.com/turbot/steampipe-plugin-sdk/v5/grpc"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
@@ -25,7 +23,7 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 	tableSchema, err := conn.RetrieveTableDefinition(ctx, tablename)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error retrieving table definition:", "err", err)
-		panic(err)
+		return nil, err
 	}
 
 	primaryKeyColumn := ""
@@ -88,31 +86,19 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 }
 
 func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
-	//  to be removed
-	plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
-	plugin.Logger(ctx).Info("Quals", d.Quals)
-	plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
-
-	tablename := d.Table.Name
 
 	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
 	if err != nil {
 		return nil, err
 	}
 
-	var jsonData string
-	if len(d.QueryContext.UnsafeQuals) > 0 {
-		qualString := qualMapToString(d.QueryContext.UnsafeQuals)
-		jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, qualString)
-	} else {
-		jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, "")
-	}
+	jsonData := conn.RetrieveJSONDataForTable(ctx, d)
 
 	var rows []map[string]interface{}
 	err = json.Unmarshal([]byte(jsonData), &rows)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error parsing JSON data:", "err", err)
-		panic(err)
+		return nil, err
 	}
 
 	for _, row := range rows {
@@ -124,22 +110,12 @@ func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrat
 
 func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
 
-	tablename := d.Table.Name
-
 	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
 	if err != nil {
 		return nil, err
 	}
 
-	var jsonData string
-	if len(d.Quals) > 0 {
-		qualString, err := equalQualsTransform(d.EqualsQuals.String())
-		if err == nil {
-			jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, qualString)
-		}
-	} else {
-		jsonData = conn.RetrieveJSONDataForTable(ctx, tablename, "")
-	}
+	jsonData := conn.RetrieveJSONDataForTable(ctx, d)
 
 	var rows []map[string]interface{}
 	err = json.Unmarshal([]byte(jsonData), &rows)
@@ -155,55 +131,4 @@ func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrate
 	row := rows[0]
 
 	return row, nil
-}
-
-func qualMapToString(qualMap map[string]*proto.Quals) string {
-	if len(qualMap) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-
-	firstKey := true
-	for _, quals := range qualMap {
-		if !firstKey {
-			sb.WriteString(" and ")
-		} else {
-			firstKey = false
-		}
-
-		var qb strings.Builder
-		for i, q := range quals.GetQuals() {
-			str := qualToString(q)
-			qb.WriteString(str)
-			// if it's not the last qual, append "and"
-			if i < len(quals.GetQuals())-1 {
-				qb.WriteString(" and ")
-			}
-		}
-		sb.WriteString(qb.String())
-	}
-
-	return sb.String()
-}
-
-func qualToString(q *proto.Qual) string {
-	fieldName := q.FieldName
-	operator := q.GetStringValue()
-	value := grpc.GetQualValue(q.Value)
-
-	return "\"" + fieldName + "\" " + operator + " \"" + fmt.Sprintf("%v", value) + "\""
-}
-
-// transform 'select * from table where ab = cd' to 'select * from table where "ab" = "cd"
-func equalQualsTransform(input string) (string, error) {
-	parts := strings.Split(input, "=")
-	if len(parts) != 2 {
-		return input, errors.New("Invalid String")
-	}
-
-	key := strings.TrimSpace(parts[0])
-	value := strings.TrimSpace(parts[1])
-
-	return fmt.Sprintf(`"%s" = "%s"`, key, value), nil
 }

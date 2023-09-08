@@ -2,6 +2,9 @@
 
 plugin.Logger(ctx).Info("tableJSONDebug, cols:", d.QueryContext.Columns)
 plugin.Logger(ctx).Info("something")
+plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
+plugin.Logger(ctx).Info("Quals", d.Quals)
+plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
 
 // .tables
 SELECT name FROM osquery_registry WHERE registry='table'
@@ -38,10 +41,13 @@ select * from file where "path"='/etc/passwd' or "path" = '/etc/shadow'
 TODO:
 --> Steampipe Slack Channel: "or" + "client.stop"
 Next Steps:
-- ssh: entweder ssh-agent oder controlpath für interaktive Auth
 - client.stop potenziell über ctx 
 - review everything (logging, error handling, code optimization)
+- qualstring transmission
 [o] client provisorisch in internal --> langfristig eigenes modul 
 [x] table descriptions
 [x] table definition more general
 [x] custom command in connection conf
+
+// general
+- ssh: entweder ssh-agent oder controlpath für interaktive Auth

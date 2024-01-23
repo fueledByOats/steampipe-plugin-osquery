@@ -5,6 +5,7 @@ plugin.Logger(ctx).Info("something")
 plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
 plugin.Logger(ctx).Info("Quals", d.Quals)
 plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
+*plugin.QueryData
 
 // .tables
 SELECT name FROM osquery_registry WHERE registry='table'

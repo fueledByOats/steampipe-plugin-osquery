@@ -93,6 +93,10 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 
 func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
 
+	plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
+	plugin.Logger(ctx).Info("Quals", d.Quals)
+	plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
+
 	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
 	if err != nil {
 		return nil, err

@@ -64,7 +64,7 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) SendQuery(sql string) (*Result, error) {
+func (c *Client) SendQuery(ctx context.Context, sql string) (*Result, error) {
 	query := &Query{SQL: sql}
 	encoder := json.NewEncoder(c.ptmx2)
 	if err := encoder.Encode(query); err != nil {
@@ -88,6 +88,7 @@ func (c *Client) SendQuery(sql string) (*Result, error) {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "{\"data\"") {
 			response = line
+			plugin.Logger(ctx).Info("Received:", line)
 			break
 		}
 	}
@@ -120,7 +121,7 @@ func (c *Client) RetrieveJSONDataForTable(ctx context.Context, d *plugin.QueryDa
 	if qualString != "" {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s", tablename, qualString)
 	}
-	result, err := c.SendQuery(query)
+	result, err := c.SendQuery(ctx, query)
 
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -131,7 +132,7 @@ func (c *Client) RetrieveJSONDataForTable(ctx context.Context, d *plugin.QueryDa
 }
 
 func (c *Client) RetrieveOsqueryTableNames(ctx context.Context) []string {
-	result, err := c.SendQuery("SELECT name FROM osquery_registry WHERE registry='table'")
+	result, err := c.SendQuery(ctx, "SELECT name FROM osquery_registry WHERE registry='table'")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return nil
@@ -156,7 +157,7 @@ func (c *Client) RetrieveTableDefinition(ctx context.Context, tablename string) 
 	jsonData := ""
 
 	query := fmt.Sprintf("PRAGMA table_info(%s);", tablename)
-	result, err := c.SendQuery(query)
+	result, err := c.SendQuery(ctx, query)
 
 	if err != nil {
 		jsonData = "{\"data\":[{\"name\":\"error\"}]"

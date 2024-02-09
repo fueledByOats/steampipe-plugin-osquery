@@ -24,13 +24,13 @@ var typeMapping = map[string]proto.ColumnType{
 //go:embed osquery_schemas.json
 var jsonData []byte
 
-// Column represents the structure of the columns in the JSON file
+// column represents the structure of the columns in the JSON file
 type Column struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
 
-// Table represents the structure of the tables in the JSON file
+// table represents the structure of the tables in the JSON file
 type Table struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
@@ -39,16 +39,16 @@ type Table struct {
 }
 
 func connect(ctx context.Context, c *plugin.Connection, cc *connection.ConnectionCache) (*osquery.Client, error) {
-	// Load client from cache if a client was already initialized for this connection
+	// load client from cache if a client was already initialized for this connection
 	cacheKey := c.Name
 	if cachedData, ok := cc.Get(ctx, cacheKey); ok {
 		return cachedData.(*osquery.Client), nil
 	}
 
-	// Prefer config settings
+	// prefer config settings
 	osqueryConfig := GetConfig(c)
 
-	// Error if the minimum config is not set
+	// error if the minimum config is not set
 	if *osqueryConfig.OsqueryCommand == "" {
 		return nil, errors.New("osquery_command must be configured")
 	}
@@ -69,13 +69,13 @@ func connect(ctx context.Context, c *plugin.Connection, cc *connection.Connectio
 		return nil, err
 	}
 
-	// Save to cache
+	// save to cache
 	cc.Set(ctx, cacheKey, conn)
 	return conn, nil
 }
 
 // retrieves the description for a given column in a table or the table itself.
-// if the table description is to be returned, set columnName to ""
+// if the table description is to be returned, set columnName to "table-description"
 func getTableOrColumnDescription(ctx context.Context, cc *connection.ConnectionCache, tablename string, columnName string) (string, bool) {
 	tablesMap, err := getTablesMap(ctx, cc)
 	if err != nil {
@@ -83,17 +83,17 @@ func getTableOrColumnDescription(ctx context.Context, cc *connection.ConnectionC
 		return "", false
 	}
 
-	// Check if the table exists
+	// check if the table exists
 	table, tableExists := tablesMap[tablename]
 	if !tableExists {
 		return "", false
 	}
 
-	if columnName == "" {
+	if columnName == "table-description" {
 		return table.Description, true
 	}
 
-	// Search for the column and its description
+	// search for the column and its description
 	for _, column := range table.Columns {
 		if column.Name == columnName {
 			return column.Description, true
@@ -103,37 +103,33 @@ func getTableOrColumnDescription(ctx context.Context, cc *connection.ConnectionC
 	return "", false
 }
 
-// getTablesMap retrieves the tablesMap from the cache or loads it if not present
+// retrieves the tablesMap from the cache or loads it if not present
 func getTablesMap(ctx context.Context, cc *connection.ConnectionCache) (map[string]Table, error) {
 	cacheKey := "tablesMap"
 	if cachedData, ok := cc.Get(ctx, cacheKey); ok {
 		return cachedData.(map[string]Table), nil
 	}
 
-	// Load the JSON data
 	tablesMap, err := LoadJSON()
 	if err != nil {
 		return nil, err
 	}
 
-	// Save to cache
 	cc.Set(ctx, cacheKey, tablesMap)
 	return tablesMap, nil
 }
 
-// LoadJSON loads and parses the JSON file into tablesMap
+// loads and parses the JSON file into tablesMap
 func LoadJSON() (map[string]Table, error) {
 	if jsonData == nil {
 		return nil, errors.New("embedded JSON data is nil")
 	}
 
-	// Parse the embedded JSON data
 	var tables []Table
 	if err := json.Unmarshal(jsonData, &tables); err != nil {
 		return nil, err
 	}
 
-	// Store the parsed data in tablesMap
 	tablesMap := make(map[string]Table)
 	for _, table := range tables {
 		tablesMap[table.Name] = table

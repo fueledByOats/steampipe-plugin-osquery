@@ -1,6 +1,7 @@
 connection "osquery" {
   plugin = "local/osquery"
 
+  # suppress ssh banners: ssh -o LogLevel=error localhost osqueryi
   # needed to create the osqueryi extension socket
   osquery_command = "osqueryi --nodisable-extensions"
 

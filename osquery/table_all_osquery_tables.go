@@ -56,7 +56,7 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 			columnDescription = fmt.Sprintf("No description available.")
 		}
 
-		cols = append(cols, &plugin.Column{Name: columnName, Type: columnType, Description: columnDescription, Transform: transform.FromField(columnName)})
+		cols = append(cols, &plugin.Column{Name: columnName, Type: columnType, Description: columnDescription, Transform: transform.FromField(columnName).TransformP(catchEmptyNumbers, columnType)})
 
 		// use the first col in case no primary key is set
 		if i == 0 {
@@ -72,7 +72,7 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 	}
 
 	// get table description
-	tableDescription, exists := getTableOrColumnDescription(ctx, cc, tablename, "")
+	tableDescription, exists := getTableOrColumnDescription(ctx, cc, tablename, "table-description")
 	if !exists || tableDescription == "" {
 		tableDescription = fmt.Sprintf("osquery table: %s", tablename)
 	}
@@ -92,10 +92,6 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 }
 
 func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
-
-	plugin.Logger(ctx).Info("EqualsQuals", d.EqualsQuals)
-	plugin.Logger(ctx).Info("Quals", d.Quals)
-	plugin.Logger(ctx).Info("UnsafeQuals", d.QueryContext.UnsafeQuals)
 
 	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
 	if err != nil {
@@ -141,4 +137,20 @@ func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrate
 	row := rows[0]
 
 	return row, nil
+}
+
+func catchEmptyNumbers(ctx context.Context, d *transform.TransformData) (interface{}, error) {
+	ds := d.Value.(string)
+	dp := d.Param.(proto.ColumnType)
+
+	// passing an empty string to INT or DOUBLE will cause an error
+	if dp == proto.ColumnType_INT && ds == "" {
+		return nil, nil
+	}
+
+	if dp == proto.ColumnType_DOUBLE && ds == "" {
+		return nil, nil
+	}
+
+	return ds, nil
 }

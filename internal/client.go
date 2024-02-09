@@ -76,11 +76,9 @@ func (c *Client) SendQuery(ctx context.Context, sql string) (*Result, error) {
 		return nil, err
 	}
 
-	// Wait for the response
 	var response string
 	scanner := bufio.NewScanner(c.ptmx2)
 
-	// Increase the buffer size
 	buf := make([]byte, 0, maxBufferSize)
 	scanner.Buffer(buf, maxBufferSize)
 
@@ -94,7 +92,7 @@ func (c *Client) SendQuery(ctx context.Context, sql string) (*Result, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		// Log the error but don't immediately return if you have a valid response
+		// log the error but don't immediately return if you have a valid response
 		fmt.Println("Scanner error:", err)
 	}
 
@@ -165,7 +163,7 @@ func (c *Client) RetrieveTableDefinition(ctx context.Context, tablename string) 
 		jsonData = string(result.Data)
 	}
 
-	var tableDef []map[string]interface{} // Change the type to interface{} for more generality
+	var tableDef []map[string]interface{}
 	err = json.Unmarshal([]byte(jsonData), &tableDef)
 	if err != nil {
 		plugin.Logger(ctx).Error("Error unmarshalling:", "err", err)

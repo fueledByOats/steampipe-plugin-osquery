@@ -45,7 +45,7 @@ TODO:
 Next Steps:
 - client.stop potenziell über ctx 
 - review everything (logging, error handling, code optimization)
-- handle ssh banner and stuff
+[x] handle ssh banner and stuff
 [o] client provisorisch in internal --> langfristig eigenes modul?
 [x] table descriptions
 [x] column descriptions

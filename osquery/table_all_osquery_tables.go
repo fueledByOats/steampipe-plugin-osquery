@@ -91,6 +91,34 @@ func tableOsquery(ctx context.Context, c *plugin.Connection, cc *connection.Conn
 	}, nil
 }
 
+
+/*func staticFileLinesTable(ctx context.Context) *plugin.Table {
+	return &plugin.Table{
+		Name:        "file_lines",
+		Description: "A table for reading lines from files",
+		List: &plugin.ListConfig{
+			Hydrate: listOsqueryTable,
+		},
+		/*Get: &plugin.GetConfig{
+			KeyColumns: plugin.SingleColumn("path"),
+			Hydrate:    getOsqueryTable,
+		},
+		Columns: []*plugin.Column{
+			{
+				Name:        "line",
+				Type:        proto.ColumnType_STRING,
+				Description: "The content of the file line",
+			},
+			{
+				Name:        "path",
+				Type:        proto.ColumnType_STRING,
+				Description: "The path to the file",
+			},
+		},
+	}
+}*/
+
+
 func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.HydrateData) (interface{}, error) {
 
 	conn, err := connect(ctx, d.Connection, d.ConnectionCache)
@@ -99,6 +127,7 @@ func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrat
 	}
 
 	jsonData := conn.RetrieveJSONDataForTable(ctx, d)
+	plugin.Logger(ctx).Info("RESPONSE LIST", jsonData)
 
 	var rows []map[string]interface{}
 	err = json.Unmarshal([]byte(jsonData), &rows)
@@ -107,7 +136,10 @@ func listOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrat
 		return nil, err
 	}
 
+	plugin.Logger(ctx).Info("ROWS", rows)
+	
 	for _, row := range rows {
+		plugin.Logger(ctx).Info("ROW", row)
 		d.StreamListItem(ctx, row)
 	}
 
@@ -122,6 +154,7 @@ func getOsqueryTable(ctx context.Context, d *plugin.QueryData, _ *plugin.Hydrate
 	}
 
 	jsonData := conn.RetrieveJSONDataForTable(ctx, d)
+	plugin.Logger(ctx).Info("RESPONSE GET", jsonData)
 
 	var rows []map[string]interface{}
 	err = json.Unmarshal([]byte(jsonData), &rows)

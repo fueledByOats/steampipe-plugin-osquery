@@ -40,5 +40,8 @@ func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plug
 		return nil, err
 	}
 
+	// Add the file_lines table statically
+    //tables["file_lines"] = staticFileLinesTable(ctx)
+
 	return tables, nil
 }

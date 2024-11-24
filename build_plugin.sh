@@ -1,3 +1,3 @@
 #!/bin/sh
 
-go build -gcflags=all="-N -l" -o "/home/sven/.steampipe/plugins/local/osquery/osquery.plugin"
+go build -gcflags=all="-N -l" -o "/home/ubuntu/.steampipe/plugins/local/osquery/osquery.plugin"

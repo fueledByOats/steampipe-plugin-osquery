@@ -6,15 +6,19 @@ import (
 )
 
 type osqueryConfig struct {
-	OsqueryCommand          *string `cty:"osquery_command"`
-	OsqueryExtensionCommand *string `cty:"osquery_extension_command"`
+	Server   *string `cty:"osquery_server"`
+	Json     *string `cty:"osquery_json"`
+	FileRead *string `cty:"osquery_file_read"`
 }
 
 var ConfigSchema = map[string]*schema.Attribute{
-	"osquery_command": {
+	"osquery_server": {
 		Type: schema.TypeString,
 	},
-	"osquery_extension_command": {
+	"osquery_json": {
+		Type: schema.TypeString,
+	},
+	"osquery_file_read": {
 		Type: schema.TypeString,
 	},
 }

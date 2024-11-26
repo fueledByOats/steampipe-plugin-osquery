@@ -5,15 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"strings"
-
 	"github.com/creack/pty"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
 )
 
 const maxBufferSize = 512 * 1024 // 512KB
@@ -27,57 +27,78 @@ type Result struct {
 }
 
 type ClientConfig struct {
-	OsqueryCommand   string
-	ExtensionCommand string
+	OsqueryCommand string
+	JsonCommnad    string
+	Extensions     []string
 }
 
 type Client struct {
-	config *ClientConfig
-	ptmx1  *os.File
-	ptmx2  *os.File
-	ctx    context.Context
+	config      *ClientConfig
+	osquery     *os.File
+	osqueryJson *os.File
+	extensionMx []*os.File
+	ctx         context.Context
 }
 
-func NewClient(cfg *ClientConfig) (*Client, error) {
+func startCommand(ctx context.Context, command, description string) (*os.File, error) {
+	args := strings.Split(command, " ")
+	plugin.Logger(ctx).Debug(fmt.Sprintf("starting %s", description), "cmd", args[0], "args", args[1:])
+
+	cmd := exec.Command(args[0], args[1:]...)
+	return pty.Start(cmd)
+}
+
+func NewClient(cfg *ClientConfig, ctx context.Context) (*Client, error) {
+	var err error
 
 	c := &Client{
 		config: cfg,
+		ctx:    ctx,
 	}
 
-	c.ctx = context.Background()
-
-	cmd1Args := strings.Split(cfg.OsqueryCommand, " ")
-	cmd1 := exec.Command(cmd1Args[0], cmd1Args[1:]...)
-	var err error
-	c.ptmx1, err = pty.Start(cmd1)
+	c.osquery, err = startCommand(ctx, cfg.OsqueryCommand, "osquery")
 	if err != nil {
-		return nil, fmt.Errorf("failed to start cmd1: %v", err)
+		return nil, fmt.Errorf("failed to start osquery: %v", err)
 	}
 
-	cmd2Args := strings.Split(cfg.ExtensionCommand, " ")
-	cmd2 := exec.Command(cmd2Args[0], cmd2Args[1:]...)
-	c.ptmx2, err = pty.Start(cmd2)
+	plugin.Logger(ctx).Debug("waiting for osquery to start")
+	time.Sleep(time.Millisecond * 250)
+
+	plugin.Logger(ctx).Info("starting steampipe extension")
+	c.osqueryJson, err = startCommand(ctx, cfg.JsonCommnad, "steampipe")
 	if err != nil {
-		return nil, fmt.Errorf("failed to start cmd2: %v", err)
+		return nil, fmt.Errorf("failed to start osquery: %v", err)
 	}
+
+	for _, extension := range cfg.Extensions {
+		plugin.Logger(ctx).Info("starting extension")
+		mx, err := startCommand(ctx, extension, "extension")
+		if err != nil {
+			return nil, fmt.Errorf("failed to start osquery: %v", err)
+		}
+		c.extensionMx = append(c.extensionMx, mx)
+	}
+
+	time.Sleep(time.Millisecond * 1000)
 
 	return c, nil
 }
 
 func (c *Client) SendQuery(ctx context.Context, sql string) (*Result, error) {
 	query := &Query{SQL: sql}
-	encoder := json.NewEncoder(c.ptmx2)
+	plugin.Logger(ctx).Debug("Sending new message to osquery", "query", sql)
+	encoder := json.NewEncoder(c.osqueryJson)
 	if err := encoder.Encode(query); err != nil {
 		return nil, err
 	}
 
-	_, err := c.ptmx2.Write([]byte("\n"))
+	_, err := c.osqueryJson.Write([]byte("\n"))
 	if err != nil {
 		return nil, err
 	}
 
 	var response string
-	scanner := bufio.NewScanner(c.ptmx2)
+	scanner := bufio.NewScanner(c.osqueryJson)
 
 	buf := make([]byte, 0, maxBufferSize)
 	scanner.Buffer(buf, maxBufferSize)
@@ -174,11 +195,16 @@ func (c *Client) RetrieveTableDefinition(ctx context.Context, tablename string) 
 }
 
 func (c *Client) Stop() {
-	if c.ptmx1 != nil {
-		c.ptmx1.Close()
+	if c.osquery != nil {
+		c.osquery.Close()
 	}
-	if c.ptmx2 != nil {
-		c.ptmx2.Close()
+	if c.osqueryJson != nil {
+		c.osqueryJson.Close()
+	}
+	for _, mx := range c.extensionMx {
+		if mx != nil {
+			mx.Close()
+		}
 	}
 }
 

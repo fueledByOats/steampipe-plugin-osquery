@@ -3,10 +3,10 @@ connection "osquery" {
 
   # suppress ssh banners: ssh -o LogLevel=error localhost osqueryi
   # needed to create the osqueryi extension socket
-  osquery_command = "osqueryi --nodisable-extensions"
+  osquery_server = "" # if empty, defaults to "osqueryi"
+  osquery_json = "" # if empty, defaults to "$HOME/.osquery/steampipe_extension --socket $HOME/.osquery/shell.em"
+  osquery_file_read = "" # if empty, defaults to "$HOME/.osquery/file_read_extension --socket $HOME/.osquery/shell.em"
 
-  # needed to run the extension
-  osquery_extension_command = "/home/sven/go/src/osquery-extension/extension --socket /home/sven/.osquery/shell.em"
 }
 
 options "database" {

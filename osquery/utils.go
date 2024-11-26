@@ -5,11 +5,18 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path"
 	osquery "steampipe-plugin-osquery/internal"
 
 	"github.com/turbot/steampipe-plugin-sdk/v5/connection"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
+)
+
+var (
+	ErrUserHomeNotFound = errors.New("user home directory could not be retrieved")
 )
 
 // maps the osquery column type to the steampipe columntype
@@ -46,25 +53,41 @@ func connect(ctx context.Context, c *plugin.Connection, cc *connection.Connectio
 	}
 
 	// prefer config settings
-	osqueryConfig := GetConfig(c)
+	cfg := GetConfig(c)
 
-	// error if the minimum config is not set
-	if *osqueryConfig.OsqueryCommand == "" {
-		return nil, errors.New("osquery_command must be configured")
-	}
-	if *osqueryConfig.OsqueryExtensionCommand == "" {
-		return nil, errors.New("osquery_extension_command must be configured")
+	if *cfg.Server == "" {
+		*cfg.Server = "osqueryi"
 	}
 
-	osqueryCommand := *osqueryConfig.OsqueryCommand
-	osqueryExtensionCommand := *osqueryConfig.OsqueryExtensionCommand
-
-	cfg := &osquery.ClientConfig{
-		OsqueryCommand:   osqueryCommand,
-		ExtensionCommand: osqueryExtensionCommand,
+	if *cfg.Json == "" {
+		// $HOME/.osquery/steampipe_extension --socket $HOME/.osquery/shell.em
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, ErrUserHomeNotFound
+		}
+		bin := path.Join(home, ".osquery", "steampipe_extension")
+		socket := path.Join(home, ".osquery", "shell.em")
+		*cfg.Json = fmt.Sprintf("%s --socket %s", bin, socket)
 	}
 
-	conn, err := osquery.NewClient(cfg)
+	if *cfg.FileRead == "" {
+		// $HOME/.osquery/file_read_extension --socket $HOME/.osquery/shell.em
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, ErrUserHomeNotFound
+		}
+		bin := path.Join(home, ".osquery", "file_read_extension")
+		socket := path.Join(home, ".osquery", "shell.em")
+		*cfg.FileRead = fmt.Sprintf("%s --socket %s", bin, socket)
+	}
+
+	conn, err := osquery.NewClient(&osquery.ClientConfig{
+		OsqueryCommand: *cfg.Server,
+		JsonCommnad:    *cfg.Json,
+		Extensions: []string{
+			*cfg.FileRead,
+		},
+	}, ctx)
 	if err != nil {
 		return nil, err
 	}

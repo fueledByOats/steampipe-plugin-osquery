@@ -28,7 +28,7 @@ type Result struct {
 
 type ClientConfig struct {
 	OsqueryCommand string
-	JsonCommnad    string
+	JsonCommand    string
 	Extensions     []string
 }
 
@@ -56,25 +56,32 @@ func NewClient(cfg *ClientConfig, ctx context.Context) (*Client, error) {
 		ctx:    ctx,
 	}
 
+	plugin.Logger(ctx).Debug("config: osquery command - ", cfg.OsqueryCommand)
+
 	c.osquery, err = startCommand(ctx, cfg.OsqueryCommand, "osquery")
 	if err != nil {
-		return nil, fmt.Errorf("failed to start osquery: %v", err)
+		plugin.Logger(ctx).Error("failed to run osquery command:", err)
+		return nil, err
 	}
 
 	plugin.Logger(ctx).Debug("waiting for osquery to start")
-	time.Sleep(time.Millisecond * 250)
+	time.Sleep(time.Millisecond * 1000)
 
-	plugin.Logger(ctx).Info("starting steampipe extension")
-	c.osqueryJson, err = startCommand(ctx, cfg.JsonCommnad, "steampipe")
+	plugin.Logger(ctx).Info("starting osquery steampipe extension")
+	plugin.Logger(ctx).Debug("config: osquery steampipe extension command - ", cfg.JsonCommand)
+	c.osqueryJson, err = startCommand(ctx, cfg.JsonCommand, "steampipe")
 	if err != nil {
-		return nil, fmt.Errorf("failed to start osquery: %v", err)
+		plugin.Logger(ctx).Error("failed to run osquery steampipe extension command:", err)
+		return nil, err
 	}
 
 	for _, extension := range cfg.Extensions {
 		plugin.Logger(ctx).Info("starting extension")
+		plugin.Logger(ctx).Debug("config: additional extension command - ", extension)
 		mx, err := startCommand(ctx, extension, "extension")
 		if err != nil {
-			return nil, fmt.Errorf("failed to start osquery: %v", err)
+			plugin.Logger(ctx).Error("failed to run additional osquery extension:", err)
+			return nil, err
 		}
 		c.extensionMx = append(c.extensionMx, mx)
 	}

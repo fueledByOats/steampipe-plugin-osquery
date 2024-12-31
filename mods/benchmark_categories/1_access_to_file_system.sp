@@ -1,6 +1,5 @@
 benchmark "access_to_fs" {
   title         = "1 Access to File System"
-  documentation = file("./docs/1_access_to_file_system.md")
   children = [
     control.check_permissions_on_etc_issue,
     control.ensure_tmp_separate_partition,

@@ -83,7 +83,7 @@ func connect(ctx context.Context, c *plugin.Connection, cc *connection.Connectio
 
 	conn, err := osquery.NewClient(&osquery.ClientConfig{
 		OsqueryCommand: *cfg.Server,
-		JsonCommnad:    *cfg.Json,
+		JsonCommand:    *cfg.Json,
 		Extensions: []string{
 			*cfg.FileRead,
 		},

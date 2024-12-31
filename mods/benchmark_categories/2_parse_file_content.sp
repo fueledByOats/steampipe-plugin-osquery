@@ -1,6 +1,5 @@
 benchmark "parse_file_content" {
   title         = "2 Parse File Content"
-  documentation = file("./docs/2_parse_file_content.md")
   children = [
     control.ensure_audit_logs_not_auto_deleted,
     control.ensure_shadowed_passwords_in_etc_passwd,
